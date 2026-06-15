@@ -1,0 +1,7 @@
+name: subconscious-adapter
+version: 1.0.0
+description: "SubConscious adapter — inject messages into existing gateway sessions via REST API. Enables out-of-band event injection that routes through the gateway's normal platform delivery."
+author: "Karla / Rev"
+kind: platform
+provides_tools: []
+provides_hooks: []
