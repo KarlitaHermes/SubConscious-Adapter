@@ -174,11 +174,41 @@ def register(ctx):
                 platform = source.platform
                 return adapters.get(platform) or adapters.get(platform.value)
 
+            def _try_queue_when_busy(
+                self,
+                event: "MessageEvent",
+                source: SessionSource,
+                *,
+                delivery: str,
+            ) -> bool:
+                """Enqueue inject when delivery=queue and the target session is busy."""
+                if delivery != "queue":
+                    return False
+                runner = getattr(self, "gateway_runner", None)
+                if runner is None:
+                    return False
+                session_key = runner._session_key_for_source(source)
+                running = getattr(runner, "_running_agents", {})
+                if session_key not in running:
+                    return False
+                platform_adapter = self._get_platform_adapter(source)
+                enqueue = getattr(runner, "_enqueue_fifo", None)
+                if platform_adapter is None or not callable(enqueue):
+                    return False
+                logger.info(
+                    "Subconscious inject queued for busy session %s (delivery=queue)",
+                    session_key,
+                )
+                enqueue(session_key, event, platform_adapter)
+                return True
+
             async def _dispatch_injected_message(
                 self,
                 event: "MessageEvent",
                 session_id: str,
                 source: SessionSource,
+                *,
+                delivery: str = "queue",
             ) -> None:
                 """Run gateway dispatch and deliver response via original platform."""
                 runner = getattr(self, "gateway_runner", None)
@@ -191,6 +221,9 @@ def register(ctx):
                                 store.switch_session(entry.session_key, session_id)
                             except Exception as exc:
                                 logger.debug("Could not switch session: %s", exc)
+
+                if self._try_queue_when_busy(event, source, delivery=delivery):
+                    return
 
                 if not self._message_handler:
                     logger.error("No _message_handler available")
@@ -264,6 +297,12 @@ def register(ctx):
 
                 session_id = payload.get("session_id", "")
                 text = payload.get("text", "")
+                delivery = str(payload.get("delivery", "queue")).strip().lower()
+                if delivery not in {"queue", "interrupt"}:
+                    return web.json_response(
+                        {"error": "delivery must be queue or interrupt"},
+                        status=400,
+                    )
 
                 if not session_id or not text:
                     return web.json_response(
@@ -284,17 +323,23 @@ def register(ctx):
                         message_type=MessageType.TEXT,
                         source=source,
                         message_id=None,
-                        raw_message={"subconscious": True},
+                        raw_message={"subconscious": True, "delivery": delivery},
                     )
 
                     asyncio.create_task(
-                        self._dispatch_injected_message(event, session_id, source)
+                        self._dispatch_injected_message(
+                            event,
+                            session_id,
+                            source,
+                            delivery=delivery,
+                        )
                     )
 
                     return web.json_response({
                         "ok": True,
                         "session_id": session_id,
                         "platform": source.platform.value,
+                        "delivery": delivery,
                     })
                 except Exception as exc:
                     logger.error("Error injecting: %s", exc, exc_info=True)

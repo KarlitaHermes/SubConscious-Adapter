@@ -49,16 +49,29 @@ Inject a message into an existing session.
 ```json
 {
   "session_id": "20260615_075357_b969b9f4",
-  "text": "Hello from the orchestrator!"
+  "text": "Hello from the orchestrator!",
+  "delivery": "queue"
 }
 ```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `session_id` | yes | Target session id from `GET /sessions` |
+| `text` | yes | Message body to inject |
+| `delivery` | no | `queue` (default) or `interrupt` |
+
+**`delivery` behavior:**
+
+- **`queue`** (default) — if Hermes is already working on that session, the inject is enqueued for the **next turn** (same FIFO as `/queue`). If the session is idle, it runs immediately. SubConscious Engine nudges use this so subconscious work never interrupts Rev's in-flight tasks.
+- **`interrupt`** — always dispatch immediately; interrupts a busy session (legacy behavior).
 
 **Response:**
 ```json
 {
   "ok": true,
   "session_id": "20260615_075357_b969b9f4",
-  "platform": "telegram"
+  "platform": "telegram",
+  "delivery": "queue"
 }
 ```
 
