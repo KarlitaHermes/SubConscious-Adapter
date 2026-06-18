@@ -1,0 +1,23 @@
+---
+description: Sanitize examples and docs before committing — no secrets or live deployment data
+alwaysApply: true
+---
+
+# Sanitize public repo content
+
+SubConscious-Adapter is public. Do not commit live Hermes or host-specific secrets.
+
+## Never commit
+
+- Full `~/.hermes/config.yaml`
+- API keys, tokens, session IDs, email addresses
+- Production cron job UUIDs or operator-specific paths
+
+## Safe to include
+
+- `plugin.yaml`, `README.md`, `UPGRADE-HERMES-version.md`
+- `examples/hermes-gateway.snippet.yaml` (subconscious platform excerpt only)
+
+For engine config, inbox, and cron howtos, follow SubConscious-Engine `docs/CRON-AND-INBOX.md` and `.cursor/rules/sanitize-public-content.mdc` there.
+
+Before commit: grep for `api_key`, `token`, `@`, `/home/`, `\bRev\b`, `\bKarla\b`, and real hostnames.

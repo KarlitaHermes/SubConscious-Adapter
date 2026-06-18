@@ -1,0 +1,11 @@
+# Hermes gateway — SubConscious excerpt (sanitized)
+# Full integration guide: SubConscious-Engine examples/WORKING-DEPLOYMENT.md
+
+platforms:
+  subconscious:
+    enabled: true
+    port: 8769
+
+plugins:
+  enabled:
+    - subconscious-adapter

@@ -62,7 +62,7 @@ Inject a message into an existing session.
 
 **`delivery` behavior:**
 
-- **`queue`** (default) — if Hermes is already working on that session, the inject is enqueued for the **next turn** (same FIFO as `/queue`). If the session is idle, it runs immediately. SubConscious Engine nudges use this so subconscious work never interrupts Rev's in-flight tasks.
+- **`queue`** (default) — if Hermes is already working on that session, the inject is enqueued for the **next turn** (same FIFO as `/queue`). If the session is idle, it runs immediately. SubConscious Engine nudges use this so subconscious work never interrupts User's in-flight tasks.
 - **`interrupt`** — always dispatch immediately; interrupts a busy session (legacy behavior).
 
 **Response:**

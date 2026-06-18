@@ -16,7 +16,7 @@
 
 ## Why
 
-SubConscious Engine fires nudges (idle, weather, inbox, etc.) while Hermes may be mid-task. Without queue delivery, injects behaved like a new Rev message and **interrupted** the current turn (`busy_input_mode: interrupt`).
+SubConscious Engine fires nudges (idle, weather, inbox, etc.) while Hermes may be mid-task. Without queue delivery, injects behaved like a new User message and **interrupted** the current turn (`busy_input_mode: interrupt`).
 
 This adapter change uses the gateway's **existing** FIFO queue (same mechanism as `/queue`). No Hermes gateway source code changes required.
 
