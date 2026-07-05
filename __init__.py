@@ -76,7 +76,7 @@ def register(ctx):
                 extra = getattr(config, "extra", None) or {}
                 self._port = int(extra.get("port", DEFAULT_PORT))
 
-            async def connect(self):
+            async def connect(self, *, is_reconnect: bool = False) -> bool:
                 from aiohttp import web
 
                 app = web.Application()

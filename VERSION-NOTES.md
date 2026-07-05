@@ -1,3 +1,33 @@
+# Version notes — Hermes gateway `is_reconnect` connect contract
+
+**Date:** 2026-07-05  
+**Adapter commit:** (this release)  
+**Requires:** Hermes gateway that forwards `is_reconnect` to `adapter.connect()` (2026-07+)
+
+## Summary
+
+`SubConsciousAdapter.connect()` now accepts the keyword-only `is_reconnect` argument that newer Hermes gateway versions pass on cold start and reconnect. Without it, the subconscious platform fails to connect with:
+
+`TypeError: connect() got an unexpected keyword argument 'is_reconnect'`
+
+## What changed
+
+| File | Change |
+|------|--------|
+| `__init__.py` | `async def connect(self, *, is_reconnect: bool = False) -> bool` |
+
+## Install / upgrade
+
+```bash
+cd /path/to/subconscious-adapter
+git pull origin main
+ln -sfn "$(pwd)" ~/.hermes/plugins/subconscious-adapter
+# Ensure no duplicate plugin.yaml under ~/.hermes/plugins/ (e.g. *.bak.* dirs)
+sudo systemctl restart hermes-gateway
+```
+
+---
+
 # Version notes — queue delivery for subconscious injects
 
 **Date:** 2026-06-15  
