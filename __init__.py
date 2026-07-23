@@ -156,14 +156,98 @@ def register(ctx):
                     return None
 
                 original_source, original_user_id = row
+                # chat_id must be the platform peer id (telegram user), not session_id
+                chat_id = original_user_id or session_id
                 return SessionSource(
                     platform=Platform(original_source),
-                    chat_id=session_id,
-                    chat_name=session_id,
+                    chat_id=chat_id,
+                    chat_name=chat_id,
                     chat_type="dm",
                     user_id=original_user_id or "subconscious",
                     user_name="SubConscious",
                 )
+
+            def _active_route_ids(self) -> set[str]:
+                """Session IDs currently bound in the gateway routing index."""
+                ids: set[str] = set()
+                runner = getattr(self, "gateway_runner", None)
+                store = getattr(runner, "session_store", None) if runner else None
+                if store is not None:
+                    try:
+                        for entry in store.list_sessions():
+                            sid = getattr(entry, "session_id", None)
+                            if sid:
+                                ids.add(str(sid))
+                        if ids:
+                            return ids
+                    except Exception as exc:
+                        logger.debug("session_store list_sessions failed: %s", exc)
+
+                sessions_file = _sessions_json_path()
+                if sessions_file.exists():
+                    try:
+                        data = json.loads(sessions_file.read_text(encoding="utf-8"))
+                        for key, entry in data.items():
+                            if key == "_README" or not isinstance(entry, dict):
+                                continue
+                            sid = entry.get("session_id")
+                            if sid:
+                                ids.add(str(sid))
+                        if ids:
+                            return ids
+                    except Exception as exc:
+                        logger.debug("Could not read sessions.json routes: %s", exc)
+
+                db_path = _state_db_path()
+                if db_path.exists():
+                    try:
+                        conn = sqlite3.connect(str(db_path))
+                        rows = conn.execute(
+                            "SELECT entry_json FROM gateway_routing"
+                        ).fetchall()
+                        conn.close()
+                        for (entry_json,) in rows:
+                            try:
+                                sid = json.loads(entry_json).get("session_id")
+                                if sid:
+                                    ids.add(str(sid))
+                            except Exception:
+                                continue
+                    except Exception as exc:
+                        logger.debug("gateway_routing read failed: %s", exc)
+                return ids
+
+            def _canonicalize_inject_target(
+                self, session_id: str
+            ) -> tuple[str, Optional[SessionSource]]:
+                """Map a stale session_id to the live route for that chat."""
+                source = self._lookup_session_origin(session_id)
+                runner = getattr(self, "gateway_runner", None)
+                store = getattr(runner, "session_store", None) if runner else None
+                if source is None or runner is None or store is None:
+                    return session_id, source
+
+                if store.lookup_by_session_id(session_id) is not None:
+                    return session_id, source
+
+                try:
+                    session_key = runner._session_key_for_source(source)
+                except Exception as exc:
+                    logger.debug("session key resolve failed: %s", exc)
+                    return session_id, source
+
+                current = store.peek_session_id(session_key)
+                if not current or current == session_id:
+                    return session_id, source
+
+                active_origin = self._lookup_session_origin(current) or source
+                logger.info(
+                    "Inject target %s is not active for %s; redirecting to %s",
+                    session_id,
+                    session_key,
+                    current,
+                )
+                return str(current), active_origin
 
             def _get_platform_adapter(self, source: SessionSource):
                 """Return the gateway adapter for the session's original platform."""
@@ -271,6 +355,7 @@ def register(ctx):
                     ).fetchall()
                     conn.close()
 
+                    active_ids = self._active_route_ids()
                     sessions = [
                         {
                             "id": row[0],
@@ -279,9 +364,19 @@ def register(ctx):
                             "title": row[3],
                             "started_at": row[4],
                             "message_count": row[5],
+                            "active": row[0] in active_ids,
                         }
                         for row in rows
                     ]
+                    # When a source has a live route, hide stale open siblings
+                    # so clients always see the session Hermes is actually on.
+                    sources_with_route = {s["source"] for s in sessions if s["active"]}
+                    if sources_with_route:
+                        sessions = [
+                            s
+                            for s in sessions
+                            if s["active"] or s["source"] not in sources_with_route
+                        ]
                     return web.json_response({"sessions": sessions})
                 except Exception as exc:
                     logger.error("Error listing sessions: %s", exc, exc_info=True)
@@ -311,7 +406,7 @@ def register(ctx):
                     )
 
                 try:
-                    source = self._lookup_session_origin(session_id)
+                    session_id, source = self._canonicalize_inject_target(session_id)
                     if source is None:
                         return web.json_response(
                             {"error": f"Session {session_id} not found"},
